@@ -15,8 +15,11 @@ string    Version = "3.09";
 #property description "WARNING: No warranty. This EA is offered \"as is\". Use at your own risk.\r\n"
 #property description "Note: Pressing the \"T\" key will open a trade."
 
+#include <stdlib.mqh>;
 #include "Position Sizer.mqh";
 #include "Position Sizer Trading.mqh";
+#include "BreakEven.mqh";
+#include "CloseAllOrders.mqh";
 
 input group "Compactness"
 input string ____Compactness = "";
@@ -113,6 +116,8 @@ input bool DefaultTPDistanceInPoints = false; // TPDistanceInPoints: TP distance
 input group "Keyboard shortcuts"
 input string ____Keyboard_Shortcuts = "Case-insensitive hotkey. Supports Ctrl, Shift.";
 input string TradeHotKey = "T"; // TradeHotKey: Execute a trade.
+input string BreakEvenHotKey = "B"; // BreakEvenHotKey: Execute a break even.
+input string CloseOrdersHotKey = "Q"; // CloseOrdersHotKey: Close all orders.
 input string SwitchOrderTypeHotKey = "O"; // SwitchOrderTypeHotKey: Switch order type.
 input string SwitchEntryDirectionHotKey = "TAB"; // SwitchEntryDirectionHotKey: Switch entry direction.
 input string SwitchHideShowLinesHotKey = "H"; // SwitchHideShowLinesHotKey: Switch Hide/Show lines.
@@ -145,6 +150,23 @@ input string SettingsFile = ""; // SettingsFile: Load custom panel settings from
 input bool PrefillAdditionalTPsBasedOnMain = true; // Prefill additional TPs based on Main?
 input bool AskBeforeClosing = false; // Ask for confirmation before closing the panel?
 input string ____Breakeven = "";
+input bool OnlyCurrentSymbol = true; // Only current chart's symbol
+input ENUM_ORDER_TYPES OrderTypeFilter = ALL_ORDERS; // Type of orders to move SL to BE
+input bool OnlyMagicNumber = false;   // Only orders matching the magic number
+input int MagicNumber = 0;            // Matching magic number
+input bool OnlyWithComment = false;   // Only orders with the following comment
+input string MatchingComment = "";    // Matching comment
+input double PercentageOfPositiveProfitToBreakEven = 30; // Percentage of positive profit to break even
+input double PercentageOfNegativeProfitToBreakEven = 40; // Percentage of negative profit to break even
+input bool EnableAutomaticBreakEven = false;  // Enable automatic break even
+input int RunAutomaticBreakEvenEveryXSeconds = 300; // Calculate break even every X seconds
+input string ____CloseAllOrders = "";
+input bool EnableCloseAllOrders = true; // Enable close all orders
+input bool CloseOnlyCurrentSymbol = true; // Only current chart's symbol
+input ENUM_CLOSE_ORDER_TYPES CloseOrderTypeFilter = ALL_ORDERS_PENDING_AND_MARKET; // Type of orders to move SL to BE
+input bool EnableAutomaticCloseAllOrders = false; // Enable automatic close all orders
+input int RunAutomaticCloseAllOrdersEveryXSeconds = 300; // Calculate close all orders every X seconds
+input double EquityToCloseAllOrders = 1000; // Close all orders if equity is less than X
 
 CPositionSizeCalculator* ExtDialog;
 
@@ -153,15 +175,25 @@ bool Dont_Move_the_Panel_to_Default_Corner_X_Y;
 uint LastRecalculationTime = 0;
 bool StopLossLineIsBeingMoved = false;
 bool TakeProfitLineIsBeingMoved[]; // Separate for each TP.
-uchar MainKey_TradeHotKey = 0, MainKey_SwitchOrderTypeHotKey = 0, MainKey_SwitchEntryDirectionHotKey = 0, MainKey_SwitchHideShowLinesHotKey = 0, MainKey_SetStopLossHotKey = 0, MainKey_SetTakeProfitHotKey = 0, MainKey_SetEntryHotKey = 0, MainKey_MinimizeMaximizeHotkey = 0, MainKey_SwitchSLPointsLevelHotKey = 0, MainKey_SwitchTPPointsLevelHotKey = 0;
-bool CtrlRequired_TradeHotKey = false, CtrlRequired_SwitchOrderTypeHotKey = false, CtrlRequired_SwitchEntryDirectionHotKey = false, CtrlRequired_SwitchHideShowLinesHotKey = false, CtrlRequired_SetStopLossHotKey = false, CtrlRequired_SetTakeProfitHotKey = false, CtrlRequired_SetEntryHotKey = false, CtrlRequired_MinimizeMaximizeHotkey = false, CtrlRequired_SwitchSLPointsLevelHotKey = false, CtrlRequired_SwitchTPPointsLevelHotKey = false;
-bool ShiftRequired_TradeHotKey = false, ShiftRequired_SwitchOrderTypeHotKey = false, ShiftRequired_SwitchEntryDirectionHotKey = false, ShiftRequired_SwitchHideShowLinesHotKey = false, ShiftRequired_SetStopLossHotKey = false, ShiftRequired_SetTakeProfitHotKey = false, ShiftRequired_SetEntryHotKey = false, ShiftRequired_MinimizeMaximizeHotkey = false, ShiftRequired_SwitchSLPointsLevelHotKey = false, ShiftRequired_SwitchTPPointsLevelHotKey = false;
+uchar MainKey_TradeHotKey = 0, MainKey_BreakEvenHotKey = 0, MainKey_CloseOrdersHotKey = 0, MainKey_SwitchOrderTypeHotKey = 0, MainKey_SwitchEntryDirectionHotKey = 0, MainKey_SwitchHideShowLinesHotKey = 0, MainKey_SetStopLossHotKey = 0, MainKey_SetTakeProfitHotKey = 0, MainKey_SetEntryHotKey = 0, MainKey_MinimizeMaximizeHotkey = 0, MainKey_SwitchSLPointsLevelHotKey = 0, MainKey_SwitchTPPointsLevelHotKey = 0;
+bool CtrlRequired_TradeHotKey = false, CtrlRequired_BreakEvenHotKey = false, CtrlRequired_CloseOrdersHotKey = false, CtrlRequired_SwitchOrderTypeHotKey = false, CtrlRequired_SwitchEntryDirectionHotKey = false, CtrlRequired_SwitchHideShowLinesHotKey = false, CtrlRequired_SetStopLossHotKey = false, CtrlRequired_SetTakeProfitHotKey = false, CtrlRequired_SetEntryHotKey = false, CtrlRequired_MinimizeMaximizeHotkey = false, CtrlRequired_SwitchSLPointsLevelHotKey = false, CtrlRequired_SwitchTPPointsLevelHotKey = false;
+bool ShiftRequired_TradeHotKey = false, ShiftRequired_BreakEvenHotKey = false, ShiftRequired_CloseOrdersHotKey = false, ShiftRequired_SwitchOrderTypeHotKey = false, ShiftRequired_SwitchEntryDirectionHotKey = false, ShiftRequired_SwitchHideShowLinesHotKey = false, ShiftRequired_SetStopLossHotKey = false, ShiftRequired_SetTakeProfitHotKey = false, ShiftRequired_SetEntryHotKey = false, ShiftRequired_MinimizeMaximizeHotkey = false, ShiftRequired_SwitchSLPointsLevelHotKey = false, ShiftRequired_SwitchTPPointsLevelHotKey = false;
 bool NeedToCheckToggleScaleOffOn;
 int PrevChartWidth = -1;
 int DeinitializationReason = -1;
 string OldSymbol = "";
 int OldTakeProfitsNumber = -1;
 int Mouse_Last_X = 0, Mouse_Last_Y = 0; // For SL/TP hotkeys.
+
+//---- Global Variables for Break Even
+datetime LastBreakEvenCandleTime = TimeCurrent();
+datetime LastBreakEvenCalcTime = TimeCurrent();
+
+//---- Global Variables for Close All Orders
+datetime LastCloseAllOrdersCandleTime = TimeCurrent();
+datetime LastCloseAllOrdersCalcTime = TimeCurrent();
+bool EnableAutomaticCloseAllOrdersCurrentSession = true;
+
 
 int OnInit()
 {
@@ -348,6 +380,10 @@ int OnInit()
         // If a hotkey is given, break up the string to check for hotkey presses in OnChartEvent().
         if (TradeHotKey != "") DissectHotKeyCombination(TradeHotKey, ShiftRequired_TradeHotKey, CtrlRequired_TradeHotKey, MainKey_TradeHotKey);
         else MainKey_TradeHotKey = 0;
+        if (BreakEvenHotKey != "") DissectHotKeyCombination(BreakEvenHotKey, ShiftRequired_BreakEvenHotKey, CtrlRequired_BreakEvenHotKey, MainKey_BreakEvenHotKey);
+        else MainKey_BreakEvenHotKey = 0;
+        if (CloseOrdersHotKey != "") DissectHotKeyCombination(CloseOrdersHotKey, ShiftRequired_CloseOrdersHotKey, CtrlRequired_CloseOrdersHotKey, MainKey_CloseOrdersHotKey);
+        else MainKey_CloseOrdersHotKey = 0;
         if (SwitchEntryDirectionHotKey != "") DissectHotKeyCombination(SwitchEntryDirectionHotKey, ShiftRequired_SwitchEntryDirectionHotKey, CtrlRequired_SwitchEntryDirectionHotKey, MainKey_SwitchEntryDirectionHotKey);
         else MainKey_SwitchEntryDirectionHotKey = 0;
         if (SwitchOrderTypeHotKey != "") DissectHotKeyCombination(SwitchOrderTypeHotKey, ShiftRequired_SwitchOrderTypeHotKey, CtrlRequired_SwitchOrderTypeHotKey, MainKey_SwitchOrderTypeHotKey);
@@ -727,7 +763,21 @@ void OnChartEvent(const int id,
             && ((((!ShiftRequired_TradeHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) >= 0))   || ((ShiftRequired_TradeHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) < 0))) // Shift
             &&  (((!CtrlRequired_TradeHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) >= 0)) || ((CtrlRequired_TradeHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) < 0))))) // Control
         {
-            Trade(); 
+            CloseAllOrders(); 
+        }
+        // BreakEven:
+        else if ((MainKey_BreakEvenHotKey != 0) && (lparam == MainKey_BreakEvenHotKey)
+            && ((((!ShiftRequired_BreakEvenHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) >= 0))   || ((ShiftRequired_BreakEvenHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) < 0))) // Shift
+            &&  (((!CtrlRequired_BreakEvenHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) >= 0)) || ((CtrlRequired_BreakEvenHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) < 0))))) // Control
+        {
+            BreakEven(); 
+        }
+        // Close all orders:
+        else if ((MainKey_CloseOrdersHotKey != 0) && (lparam == MainKey_CloseOrdersHotKey)
+            && ((((!ShiftRequired_CloseOrdersHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) >= 0))   || ((ShiftRequired_CloseOrdersHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) < 0))) // Shift
+            &&  (((!CtrlRequired_CloseOrdersHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) >= 0)) || ((CtrlRequired_CloseOrdersHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) < 0))))) // Control
+        {
+            CloseAllOrders();
         }
         // Set stop-loss:
         else if ((MainKey_SetStopLossHotKey != 0) && (lparam == MainKey_SetStopLossHotKey)
@@ -901,6 +951,31 @@ void OnTrade()
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+    if (EnableAutomaticBreakEven) {
+        // Break Even after every new candle or after 5 minutes
+        long diffInSecondsBreakEven = TimeCurrent() - LastBreakEvenCalcTime;
+        if (LastBreakEvenCandleTime != Time[0] || (diffInSecondsBreakEven >= RunAutomaticBreakEvenEveryXSeconds)) {
+            LastBreakEvenCandleTime = Time[0];
+            LastBreakEvenCalcTime = TimeCurrent();
+            BreakEven();
+        }
+    }
+
+    if (EnableAutomaticCloseAllOrders && EnableAutomaticCloseAllOrdersCurrentSession) {
+        // Break Even after every new candle or after 5 minutes
+        long diffInSecondsCloseOrders = TimeCurrent() - LastCloseAllOrdersCalcTime;
+        if (LastCloseAllOrdersCandleTime != Time[0] || (diffInSecondsCloseOrders >= RunAutomaticCloseAllOrdersEveryXSeconds)) {
+            if (AccountEquity() <= EquityToCloseAllOrders) {
+                bool forceCloseAllOrders = true;
+                CloseAllOrders(forceCloseAllOrders);
+                EnableAutomaticCloseAllOrdersCurrentSession = false;
+                Alert("ATTENTION: Stop Out level reached. Closing all open and pending orders.");
+            }
+        }
+    }
+    
+    
+
     if (NeedToCheckToggleScaleOffOn)
     {
         if ((double)ChartGetInteger(ChartID(), CHART_WIDTH_IN_PIXELS) != PrevChartWidth)

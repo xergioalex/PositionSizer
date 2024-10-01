@@ -46,6 +46,8 @@ void StartBreakEvenStrategy() {
     return;
   }
 
+  Print("---");
+
   double profitDollarsToSet = 10;
   // Loop through all orders
   for (int i = 0; i < ordersTotal; i++) {
@@ -72,10 +74,10 @@ void StartBreakEvenStrategy() {
 }
 
 
-double GetPipValueMultiplier() {
+double GetPipValueMultiplier(int orderDigits) {
   // Return pip value multiplier based on the number of digits
-  if (Digits == 5 || Digits == 3 || Digits == 2) {
-    return MathPow(10, Digits);
+  if (orderDigits == 5 || orderDigits == 3 || orderDigits == 2) {
+    return MathPow(10, orderDigits);
   } else {
     return 0;
   }
@@ -104,24 +106,26 @@ string GetOrderTypeStr(int orderType) {
 double ShouldApplyBreakEvenToTheOrder(double riskDollars, double profitDollars, double currentProfitDollars) {
   // Verify if we can calculate the break even
   if ((!riskDollars > 0 && profitDollars > 0 && currentProfitDollars != 0)) {
+    Print("ERROR: Dollars values not valid.");
     return false;
   } 
 
   // If the profit is less than half of the risk, we don't apply the break even
   if (profitDollars > 0 && profitDollars < (riskDollars / 4)) {
+    Print("i) Breakeven already applied (Negative).");
     return false;
   }
 
   // Depending on the current profit, we will calculate the break even in dollars
   if (currentProfitDollars > 0) {
     double positiveProfitPercentage = (currentProfitDollars * 100) / profitDollars;
-    Print("Positive Profit Percentage: ", positiveProfitPercentage);
+    Print("i) % Profit (Positive): ", positiveProfitPercentage);
     if (MathAbs(positiveProfitPercentage) > PercentageOfPositiveProfitToBreakEven) {
       return true;
     }
   } else {
     double negativeProfitPercentage = (currentProfitDollars * 100) / riskDollars;
-    Print("Negative Profit Percentage: ", negativeProfitPercentage);
+    Print("i) % Profit (Negative): ", negativeProfitPercentage);
     if (MathAbs(negativeProfitPercentage) > PercentageOfNegativeProfitToBreakEven) {
       return true;
     }
@@ -131,7 +135,7 @@ double ShouldApplyBreakEvenToTheOrder(double riskDollars, double profitDollars, 
 
 double CalcBreakEvenDollars(double orderCommission, double orderSwap) {
   // Calculate break even in dollars
-  double breakEvenDollars = (orderCommission + (orderCommission * 0.10)) + orderSwap;
+  double breakEvenDollars = (orderCommission + (orderCommission * 0.30)) + orderSwap;
   if (breakEvenDollars > 0) {
     breakEvenDollars = orderCommission;
   }
@@ -151,6 +155,7 @@ bool ApplyOrderBreakEven(int orderType) {
   double orderSwap = OrderSwap();
   int orderMagicNumber = OrderMagicNumber();
   string orderComment = OrderComment();
+  int orderDigits = (int)MarketInfo(orderSymbol, MODE_DIGITS);
   double currentProfitDollars = OrderProfit();
 
   // Check if the order matches the filter and if not, skip the order and move to the next one.
@@ -160,29 +165,20 @@ bool ApplyOrderBreakEven(int orderType) {
   if ((OnlyCurrentSymbol) && (orderSymbol != Symbol())) return false;
   if ((OnlyMagicNumber) && (orderMagicNumber != MagicNumber)) return false;
   if ((OnlyWithComment) && (StringCompare(orderComment, MatchingComment) != 0)) return false;
-
-  // Verify if the order Break Even was already applied
-  if (orderType == OP_BUY) {
-    if (orderStopLoss > orderOpenPrice) {
-      return false;
-    }
-  } else if (orderType == OP_SELL) {
-    if (orderOpenPrice > orderStopLoss) {
-      return false;
-    }
-  }
   
   // Calculate risk and profit in dollars
   double pipValue = MarketInfo(orderSymbol, MODE_TICKVALUE);
-  double pipValueMultiplier = GetPipValueMultiplier();
+  double pipValueMultiplier = GetPipValueMultiplier(orderDigits);
 
   // If pip value multiplier is 0, continue to the next order
   if (pipValueMultiplier == 0) {
+    Print("ERROR: Invalid pip value multiplier.");
     return false;
   }
   double profitDollars = 0.0;  
   double riskDollars = 0.0; 
   double lotSizePipValue = (orderLotsSize * pipValue);
+  string resultError = "";
   
   if (orderType == OP_BUY) {
     // Calculate risk and profit in pips and dollars
@@ -191,19 +187,23 @@ bool ApplyOrderBreakEven(int orderType) {
     riskDollars = (riskPipDiff * lotSizePipValue) * pipValueMultiplier;
     profitDollars = (profitPipDiff * lotSizePipValue) * pipValueMultiplier;
 
-    // Verify if we should apply break even to the order
-    if (!ShouldApplyBreakEvenToTheOrder(riskDollars, profitDollars, currentProfitDollars)) {
-      Print("Should NOT apply break even to the order");
-      return false;
+    // Verify if the order Break Even was already applied
+    if (orderStopLoss >= orderOpenPrice) {
+      resultError = "i) Breakeven already applied (Positive).";
     }
 
-    // Calculate break even in dollars
-    double breakEvenDollars = CalcBreakEvenDollars(orderCommission, orderSwap);
-    double profitPips = breakEvenDollars / lotSizePipValue;
-    if (currentProfitDollars > 0) {
-      orderStopLoss = orderOpenPrice + (profitPips * Point);
+    // Verify if we should apply break even to the order
+    if (resultError == "" && ShouldApplyBreakEvenToTheOrder(riskDollars, profitDollars, currentProfitDollars)) {
+      // Calculate break even in dollars
+      double breakEvenDollars = CalcBreakEvenDollars(orderCommission, orderSwap);
+      double profitPips = breakEvenDollars / lotSizePipValue;
+      if (currentProfitDollars > 0) {
+        orderStopLoss = orderOpenPrice + (profitPips * Point);
+      } else {
+        orderTakeProfit = orderOpenPrice + (profitPips * Point);
+      }
     } else {
-      orderTakeProfit = orderOpenPrice + (profitPips * Point);
+      resultError = "i) Should NOT apply break even to the order";
     }
   } else if (orderType == OP_SELL) {
     // Calculate risk and profit in pips and dollars
@@ -212,30 +212,64 @@ bool ApplyOrderBreakEven(int orderType) {
     riskDollars = (riskPipDiff * lotSizePipValue) * pipValueMultiplier;
     profitDollars = (profitPipDiff * lotSizePipValue) * pipValueMultiplier;
 
-    // Verify if we should apply break even to the order
-    if (!ShouldApplyBreakEvenToTheOrder(riskDollars, profitDollars, currentProfitDollars)) {
-      Print("Should NOT apply break even to the order");
-      return false;
+    // Verify if the order Break Even was already applied
+    if (orderOpenPrice >= orderStopLoss) {
+      resultError = "i) Positive breakeven already applied.";
     }
-    
-    // Calculate break even in dollars
-    double breakEvenDollars = CalcBreakEvenDollars(orderCommission, orderSwap);
-    double profitPips = breakEvenDollars / lotSizePipValue;
-    if (currentProfitDollars > 0) {
-      orderStopLoss = orderOpenPrice - (profitPips * Point);
+
+    // Verify if we should apply break even to the order
+    if (resultError == "" && ShouldApplyBreakEvenToTheOrder(riskDollars, profitDollars, currentProfitDollars)) {
+      // Calculate break even in dollars
+      double breakEvenDollars = CalcBreakEvenDollars(orderCommission, orderSwap);
+      double profitPips = breakEvenDollars / lotSizePipValue;
+      if (currentProfitDollars > 0) {
+        orderStopLoss = orderOpenPrice - (profitPips * Point);
+      } else {
+        orderTakeProfit = orderOpenPrice - (profitPips * Point);
+      }
     } else {
-      orderTakeProfit = orderOpenPrice - (profitPips * Point);
+      resultError = "i) Should NOT apply break even to the order";
     }
   }
 
   // Modify order
-  if (!OrderModify(orderTicket, orderOpenPrice, orderStopLoss, orderTakeProfit, orderExpiration, clrNONE)) {
-    Print("Error modifying order: ", ErrorDescription(GetLastError()));
-    return false;
+  if (resultError == "" && !OrderModify(orderTicket, orderOpenPrice, orderStopLoss, orderTakeProfit, orderExpiration, clrNONE)) {
+    resultError = "Error modifying order: " + ErrorDescription(GetLastError());
   }
   
-  // Print order details
-  string orderTypeStr = GetOrderTypeStr(orderType);
-  Print("Order #", orderTicket, ": Symbol = ", orderSymbol, ", Type = ", orderTypeStr, ", Price = ", orderOpenPrice, ", Lot Size = ", orderLotsSize, ", Stop Loss = ", orderStopLoss, ", Take Profit = ", orderTakeProfit, ", Risk ($) = ", riskDollars, ", Profit ($) = ", profitDollars);
+  PrintOrderDetails(
+    orderTicket, orderSymbol, orderType, orderDigits, orderOpenPrice, orderLotsSize, orderStopLoss, 
+    orderTakeProfit, riskDollars, profitDollars, currentProfitDollars, resultError
+  );
+
+  if (resultError != "") {
+    return false;
+  }
   return true;
+}
+
+void PrintOrderDetails(
+  int orderTicket, 
+  string orderSymbol, 
+  int orderType, 
+  int orderDigits, 
+  double orderOpenPrice, 
+  double orderLotsSize, 
+  double orderStopLoss, 
+  double orderTakeProfit, 
+  double riskDollars, 
+  double profitDollars,
+  double currentProfitDollars,
+  string resultError = ""
+) {
+  string orderTypeStr = GetOrderTypeStr(orderType);
+  Print("Order #", orderTicket, ": Symbol = ", orderSymbol, ", Type = ", orderTypeStr, ", Digits = ", orderDigits, ", Price = ", orderOpenPrice, ", Lot Size = ", orderLotsSize, ", Stop Loss = ", orderStopLoss);
+  Print("Take Profit = ", orderTakeProfit, ", Risk ($) = ", riskDollars, ", Profit ($) = ", profitDollars, ", Current Profit ($) = ", currentProfitDollars);
+  
+  if (resultError != "") {
+    Print("ERROR: ", resultError);
+  } else {
+    Print("SUCCESS:Order modified successfully.");
+  }
+  Print("---");
 }

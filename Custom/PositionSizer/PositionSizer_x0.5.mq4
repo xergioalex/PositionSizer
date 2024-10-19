@@ -117,6 +117,7 @@ input group "Keyboard shortcuts"
 input string ____Keyboard_Shortcuts = "Case-insensitive hotkey. Supports Ctrl, Shift.";
 input string TradeHotKey = "T"; // TradeHotKey: Execute a trade.
 input string BreakEvenHotKey = "B"; // BreakEvenHotKey: Execute a break even.
+input string BreakEvenForcedHotKey = "N"; // BreakEvenForcedHotKey: Execute a break even.
 input string CloseOrdersHotKey = "Q"; // CloseOrdersHotKey: Close all orders.
 input string SwitchOrderTypeHotKey = "O"; // SwitchOrderTypeHotKey: Switch order type.
 input string SwitchEntryDirectionHotKey = "TAB"; // SwitchEntryDirectionHotKey: Switch entry direction.
@@ -175,9 +176,9 @@ bool Dont_Move_the_Panel_to_Default_Corner_X_Y;
 uint LastRecalculationTime = 0;
 bool StopLossLineIsBeingMoved = false;
 bool TakeProfitLineIsBeingMoved[]; // Separate for each TP.
-uchar MainKey_TradeHotKey = 0, MainKey_BreakEvenHotKey = 0, MainKey_CloseOrdersHotKey = 0, MainKey_SwitchOrderTypeHotKey = 0, MainKey_SwitchEntryDirectionHotKey = 0, MainKey_SwitchHideShowLinesHotKey = 0, MainKey_SetStopLossHotKey = 0, MainKey_SetTakeProfitHotKey = 0, MainKey_SetEntryHotKey = 0, MainKey_MinimizeMaximizeHotkey = 0, MainKey_SwitchSLPointsLevelHotKey = 0, MainKey_SwitchTPPointsLevelHotKey = 0;
-bool CtrlRequired_TradeHotKey = false, CtrlRequired_BreakEvenHotKey = false, CtrlRequired_CloseOrdersHotKey = false, CtrlRequired_SwitchOrderTypeHotKey = false, CtrlRequired_SwitchEntryDirectionHotKey = false, CtrlRequired_SwitchHideShowLinesHotKey = false, CtrlRequired_SetStopLossHotKey = false, CtrlRequired_SetTakeProfitHotKey = false, CtrlRequired_SetEntryHotKey = false, CtrlRequired_MinimizeMaximizeHotkey = false, CtrlRequired_SwitchSLPointsLevelHotKey = false, CtrlRequired_SwitchTPPointsLevelHotKey = false;
-bool ShiftRequired_TradeHotKey = false, ShiftRequired_BreakEvenHotKey = false, ShiftRequired_CloseOrdersHotKey = false, ShiftRequired_SwitchOrderTypeHotKey = false, ShiftRequired_SwitchEntryDirectionHotKey = false, ShiftRequired_SwitchHideShowLinesHotKey = false, ShiftRequired_SetStopLossHotKey = false, ShiftRequired_SetTakeProfitHotKey = false, ShiftRequired_SetEntryHotKey = false, ShiftRequired_MinimizeMaximizeHotkey = false, ShiftRequired_SwitchSLPointsLevelHotKey = false, ShiftRequired_SwitchTPPointsLevelHotKey = false;
+uchar MainKey_TradeHotKey = 0, MainKey_BreakEvenHotKey = 0, MainKey_BreakEvenForcedHotKey = 0, MainKey_CloseOrdersHotKey = 0, MainKey_SwitchOrderTypeHotKey = 0, MainKey_SwitchEntryDirectionHotKey = 0, MainKey_SwitchHideShowLinesHotKey = 0, MainKey_SetStopLossHotKey = 0, MainKey_SetTakeProfitHotKey = 0, MainKey_SetEntryHotKey = 0, MainKey_MinimizeMaximizeHotkey = 0, MainKey_SwitchSLPointsLevelHotKey = 0, MainKey_SwitchTPPointsLevelHotKey = 0;
+bool CtrlRequired_TradeHotKey = false, CtrlRequired_BreakEvenHotKey = false, CtrlRequired_BreakEvenForcedHotKey = false, CtrlRequired_CloseOrdersHotKey = false, CtrlRequired_SwitchOrderTypeHotKey = false, CtrlRequired_SwitchEntryDirectionHotKey = false, CtrlRequired_SwitchHideShowLinesHotKey = false, CtrlRequired_SetStopLossHotKey = false, CtrlRequired_SetTakeProfitHotKey = false, CtrlRequired_SetEntryHotKey = false, CtrlRequired_MinimizeMaximizeHotkey = false, CtrlRequired_SwitchSLPointsLevelHotKey = false, CtrlRequired_SwitchTPPointsLevelHotKey = false;
+bool ShiftRequired_TradeHotKey = false, ShiftRequired_BreakEvenHotKey = false, ShiftRequired_BreakEvenForcedHotKey = false, ShiftRequired_CloseOrdersHotKey = false, ShiftRequired_SwitchOrderTypeHotKey = false, ShiftRequired_SwitchEntryDirectionHotKey = false, ShiftRequired_SwitchHideShowLinesHotKey = false, ShiftRequired_SetStopLossHotKey = false, ShiftRequired_SetTakeProfitHotKey = false, ShiftRequired_SetEntryHotKey = false, ShiftRequired_MinimizeMaximizeHotkey = false, ShiftRequired_SwitchSLPointsLevelHotKey = false, ShiftRequired_SwitchTPPointsLevelHotKey = false;
 bool NeedToCheckToggleScaleOffOn;
 int PrevChartWidth = -1;
 int DeinitializationReason = -1;
@@ -382,6 +383,8 @@ int OnInit()
         else MainKey_TradeHotKey = 0;
         if (BreakEvenHotKey != "") DissectHotKeyCombination(BreakEvenHotKey, ShiftRequired_BreakEvenHotKey, CtrlRequired_BreakEvenHotKey, MainKey_BreakEvenHotKey);
         else MainKey_BreakEvenHotKey = 0;
+        if (BreakEvenForcedHotKey != "") DissectHotKeyCombination(BreakEvenForcedHotKey, ShiftRequired_BreakEvenForcedHotKey, CtrlRequired_BreakEvenForcedHotKey, MainKey_BreakEvenForcedHotKey);
+        else MainKey_BreakEvenForcedHotKey = 0;
         if (CloseOrdersHotKey != "") DissectHotKeyCombination(CloseOrdersHotKey, ShiftRequired_CloseOrdersHotKey, CtrlRequired_CloseOrdersHotKey, MainKey_CloseOrdersHotKey);
         else MainKey_CloseOrdersHotKey = 0;
         if (SwitchEntryDirectionHotKey != "") DissectHotKeyCombination(SwitchEntryDirectionHotKey, ShiftRequired_SwitchEntryDirectionHotKey, CtrlRequired_SwitchEntryDirectionHotKey, MainKey_SwitchEntryDirectionHotKey);
@@ -763,7 +766,7 @@ void OnChartEvent(const int id,
             && ((((!ShiftRequired_TradeHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) >= 0))   || ((ShiftRequired_TradeHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) < 0))) // Shift
             &&  (((!CtrlRequired_TradeHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) >= 0)) || ((CtrlRequired_TradeHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) < 0))))) // Control
         {
-            CloseAllOrders(); 
+            Trade(); 
         }
         // BreakEven:
         else if ((MainKey_BreakEvenHotKey != 0) && (lparam == MainKey_BreakEvenHotKey)
@@ -771,6 +774,13 @@ void OnChartEvent(const int id,
             &&  (((!CtrlRequired_BreakEvenHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) >= 0)) || ((CtrlRequired_BreakEvenHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) < 0))))) // Control
         {
             BreakEven(); 
+        }
+        // BreakEvenForced:
+        else if ((MainKey_BreakEvenForcedHotKey != 0) && (lparam == MainKey_BreakEvenForcedHotKey)
+            && ((((!ShiftRequired_BreakEvenForcedHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) >= 0))   || ((ShiftRequired_BreakEvenForcedHotKey) && (TerminalInfoInteger(TERMINAL_KEYSTATE_SHIFT) < 0))) // Shift
+            &&  (((!CtrlRequired_BreakEvenForcedHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) >= 0)) || ((CtrlRequired_BreakEvenForcedHotKey)  && (TerminalInfoInteger(TERMINAL_KEYSTATE_CONTROL) < 0))))) // Control
+        {
+            BreakEven(true); 
         }
         // Close all orders:
         else if ((MainKey_CloseOrdersHotKey != 0) && (lparam == MainKey_CloseOrdersHotKey)

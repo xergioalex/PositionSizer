@@ -40,7 +40,7 @@ input bool HideEntryLineOnInstant = false; // Hide Entry line for Instant orders
 input ADDITIONAL_TRADE_BUTTONS AdditionalTradeButtons = ADDITIONAL_TRADE_BUTTONS_MAIN; // Additional Trade buttons:
 input group "Fonts"
 input string ____Fonts = "";
-input color sl_label_font_color = OrangeRed; // SL Label  Color
+input color sl_label_font_color = DarkOrange; // SL Label  Color
 input color tp_label_font_color = ForestGreen; // TP Label Font Color
 input color entry_label_font_color = DodgerBlue; // Entry Label Font Color
 input uint font_size = 13; // Labels Font Size
@@ -48,7 +48,7 @@ input string font_face = "Courier"; // Labels Font Face
 input group "Lines"
 input string ____Lines = "";
 input color entry_line_color = DodgerBlue; // Entry Line Color
-input color stoploss_line_color = OrangeRed; // Stop-Loss Line Color
+input color stoploss_line_color = DarkOrange; // Stop-Loss Line Color
 input color takeprofit_line_color = ForestGreen; // Take-Profit Line Color
 input color be_line_color = Magenta; // BE Line Color
 input ENUM_LINE_STYLE entry_line_style = STYLE_SOLID; // Entry Line Style
